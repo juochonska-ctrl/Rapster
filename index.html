@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapster</title>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #101010;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 25px 15px;
+}
+
+h1 {
+  font-size: 52px;
+  color: #c5ff00;
+  margin: 15px 0 5px;
+  letter-spacing: -3px;
+}
+
+.subtitle {
+  color: #aaa;
+  margin-bottom: 30px;
+}
+
+.container {
+  max-width: 500px;
+  margin: auto;
+  background: #202020;
+  padding: 22px;
+  border-radius: 20px;
+}
+
+button {
+  width: 100%;
+  padding: 16px;
+  margin: 8px 0;
+  border: none;
+  border-radius: 12px;
+  background: #c5ff00;
+  color: black;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #383838;
+  color: white;
+}
+
+input {
+  width: 100%;
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid #555;
+  background: #151515;
+  color: white;
+}
+
+#reader {
+  width: 100%;
+  margin: 15px auto;
+}
+
+#player {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-top: 15px;
+}
+
+#player iframe {
+  width: 100%;
+  height: 100%;
+}
+
+#status {
+  color: #c5ff00;
+  margin: 15px 0;
+  min-height: 24px;
+}
+
+.small {
+  color: #888;
+  font-size: 12px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>RAPSTER</h1>
+<p class="subtitle">Znasz ten numer? Udowodnij!</p>
+
+<div class="container">
+
+  <h2>🎵 Muzyczna runda</h2>
+
+  <button onclick="startScanner()">
+    📷 SKANUJ KOD QR
+  </button>
+
+  <div id="reader"></div>
+
+  <p>Lub wklej link YouTube:</p>
+
+  <input
+    id="manualLink"
+    type="url"
+    placeholder="https://www.youtube.com/watch?v=..."
+  >
+
+  <button class="secondary" onclick="useManualLink()">
+    Wczytaj link
+  </button>
+
+  <div id="status">Czekam na kod QR...</div>
+
+  <div id="player"></div>
+
+  <button onclick="playSong()">
+    ▶ ODTWÓRZ FRAGMENT
+  </button>
+
+  <button class="secondary" onclick="nextSong()">
+    🔀 LOSUJ MOMENT PONOWNIE
+  </button>
+
+  <p class="small">
+    Rapster – muzyczna gra imprezowa
+  </p>
+
+</div>
+
+<script>
+let scanner = null;
+let currentVideoId = null;
+let randomStart = 60;
+let player = null;
+let playerReady = false;
+
+// Pobieranie ID filmu z linku YouTube
+function getVideoId(url) {
+  try {
+    const parsed = new URL(url);
+
+    if (
+      parsed.hostname === "youtu.be" ||
+      parsed.hostname.endsWith(".youtu.be")
+    ) {
+      return parsed.pathname.split("/")[1] || null;
+    }
+
+    const host = parsed.hostname.replace(/^www\./, "");
+
+    if (
+      host !== "youtube.com" &&
+      !host.endsWith(".youtube.com")
+    ) return null;
+
+    if (parsed.pathname === "/watch") {
+      return parsed.searchParams.get("v");
+    }
+
+    const parts = parsed.pathname.split("/").filter(Boolean);
+
+    if (["embed", "shorts", "live"].includes(parts[0])) {
+      return parts[1] || null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Losowy moment od 60 do 120 sekund
+function randomizeMoment() {
+  randomStart = Math.floor(Math.random() * 61) + 60;
+}
+
+// Inicjalizacja YouTube API
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player("player", {
+    width: "100%",
+    height: "100%",
+    videoId: "",
+    playerVars: {
+      playsinline: 1,
+      controls: 1,
+      rel: 0
+    },
+    events: {
+      onReady: function() {
+        playerReady = true;
+      },
+      onError: function() {
+        document.getElementById("status").innerText =
+          "Nie można odtworzyć tego filmu. Spróbuj innego linku.";
+      }
+    }
+  });
+}
+
+// Przygotowanie piosenki
+function loadSong(url) {
+  const id = getVideoId(url);
+
+  if (!id) {
+    document.getElementById("status").innerText =
+      "Nieprawidłowy link YouTube!";
+    return;
+  }
+
+  currentVideoId = id;
+  randomizeMoment();
+
+  document.getElementById("status").innerText =
+    "Piosenka gotowa! Wylosowano moment: " +
+    Math.floor(randomStart / 60) + ":" +
+    String(randomStart % 60).padStart(2, "0");
+
+  if (playerReady) {
+    player.stopVideo();
+  }
+}
+
+// Odtwarzanie 30-sekundowego fragmentu
+function playSong() {
+  if (!currentVideoId) {
+    document.getElementById("status").innerText =
+      "Najpierw zeskanuj kod QR lub wklej link!";
+    return;
+  }
+
+  if (!playerReady) {
+    document.getElementById("status").innerText =
+      "Odtwarzacz jeszcze się ładuje. Spróbuj za chwilę.";
+    return;
+  }
+
+  player.loadVideoById({
+    videoId: currentVideoId,
+    startSeconds: randomStart,
+    endSeconds: randomStart + 30
+  });
+
+  document.getElementById("status").innerText =
+    "🎧 Słuchaj uważnie! 30 sekund na zgadywanie.";
+}
+
+// Losowanie nowego fragmentu tej samej piosenki
+function nextSong() {
+  if (!currentVideoId) return;
+
+  randomizeMoment();
+
+  document.getElementById("status").innerText =
+    "Nowy fragment od " + randomStart + " sekundy.";
+
+  playSong();
+}
+
+// Ręczne wczytanie linku
+function useManualLink() {
+  const url = document.getElementById("manualLink").value.trim();
+  loadSong(url);
+}
+
+// Skaner QR
+async function startScanner() {
+  try {
+    if (!scanner) {
+      scanner = new Html5Qrcode("reader");
+    }
+
+    if (scanner.isScanning) return;
+
+    await scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      async function(decodedText) {
+        try {
+          await scanner.stop();
+        } catch(e) {}
+
+        loadSong(decodedText);
+      },
+      function(error) {
+        // Pomijamy błędy odczytu pojedynczych klatek
+      }
+    );
+
+    document.getElementById("status").innerText =
+      "Skieruj aparat na kod QR.";
+
+  } catch(error) {
+    document.getElementById("status").innerText =
+      "Nie udało się uruchomić aparatu. Sprawdź uprawnienia i HTTPS.";
+  }
+}
+</script>
+
+</body>
